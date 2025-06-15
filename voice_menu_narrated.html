@@ -1,0 +1,143 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบสั่งอาหารด้วยเสียง</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      padding: 50px;
+    }
+    h1 {
+      color: #222;
+    }
+    #status {
+      font-size: 1.3em;
+      margin-top: 20px;
+      color: #007BFF;
+    }
+    .mic-icon {
+      font-size: 80px;
+      color: #dc3545;
+      margin-top: 40px;
+    }
+    .instruction {
+      font-size: 1em;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙️ ระบบสั่งอาหารด้วยเสียง</h1>
+  <p class="instruction">พูดว่า "ใช่" เพื่อเริ่มสั่งอาหาร แล้วเลือกเมนูด้วยเสียง</p>
+  <div class="mic-icon">🎤</div>
+  <p id="status">กำลังโหลด...</p>
+
+  <script>
+    const blynkToken = "vd6V8MwWDonxjkjZD-XXx3fKqsidTaDv";
+
+    function speakNarration(type) {
+      let text = "";
+      switch (type) {
+        case "start":
+          text = "คุณต้องการสั่งอาหารหรือไม่ กรุณาตอบว่า ใช่ หรือ ไม่ใช่";
+          break;
+        case "menu":
+          text = "โปรดเลือกเมนูอาหารที่คุณต้องการ เช่น ต้มยำกุ้ง ผัดกระเพรา หรือ แกงส้ม";
+          break;
+        case "unknown":
+          text = "ไม่รู้จักเมนูนี้ กรุณาพูดใหม่อีกครั้ง";
+          break;
+        case "error":
+          text = "เกิดข้อผิดพลาดในการฟัง กรุณารอสักครู่แล้วลองใหม่";
+          break;
+        case "sent":
+          text = "ระบบได้รับคำสั่งเรียบร้อย กำลังกลับสู่เมนูเริ่มต้น";
+          break;
+        default:
+          text = type;
+      }
+      document.getElementById("status").innerText = text;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "th-TH";
+      speechSynthesis.speak(utterance);
+    }
+
+    function sendToBlynk(pin, menuName) {
+      const url = `https://blynk.cloud/external/api/update?token=${blynkToken}&${pin}=1`;
+      fetch(url)
+        .then(response => {
+          if (response.ok) {
+            speakNarration("ระบบได้รับคำสั่งเมนู " + menuName + " เรียบร้อยแล้ว");
+            setTimeout(() => speakNarration("sent"), 1500);
+            setTimeout(askToOrder, 4000);
+          } else {
+            speakNarration("ส่งคำสั่งไม่สำเร็จ");
+            setTimeout(askToOrder, 3000);
+          }
+        });
+    }
+
+    function askToOrder() {
+      speakNarration("start");
+
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = "th-TH";
+      recognition.interimResults = false;
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript.toLowerCase();
+        if (text.includes("ใช่")) {
+          setTimeout(() => speakNarration("menu"), 1000);
+          setTimeout(listenForMenu, 3500);
+        } else {
+          speakNarration("ไม่ได้รับคำว่าใช่ ขอถามใหม่อีกครั้ง");
+          setTimeout(askToOrder, 3000);
+        }
+      };
+      recognition.onerror = () => {
+        speakNarration("error");
+        setTimeout(askToOrder, 3000);
+      };
+      recognition.start();
+    }
+
+    function listenForMenu() {
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = "th-TH";
+      recognition.interimResults = false;
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript.toLowerCase();
+        document.getElementById("status").innerText = `คุณพูดว่า: ${text}`;
+        const utterance = new SpeechSynthesisUtterance(`คุณพูดว่า ${text}`);
+        utterance.lang = "th-TH";
+        speechSynthesis.speak(utterance);
+
+        if (text.includes("ต้มยำกุ้ง")) {
+          sendToBlynk("V0", "ต้มยำกุ้ง");
+        } else if (text.includes("ผัดกระเพรา")) {
+          sendToBlynk("V1", "ผัดกระเพรา");
+        } else if (text.includes("แกงส้ม")) {
+          sendToBlynk("V2", "แกงส้ม");
+        } else {
+          setTimeout(() => speakNarration("unknown"), 1500);
+          setTimeout(listenForMenu, 3500);
+        }
+      };
+      recognition.onerror = () => {
+        speakNarration("error");
+        setTimeout(askToOrder, 3000);
+      };
+      recognition.start();
+    }
+
+    window.onload = () => {
+      speakNarration("กำลังโหลด...");
+      setTimeout(askToOrder, 2000);
+    };
+  </script>
+</body>
+</html>
