@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>เมนูอาหารไทยด้วยเสียง</title>
+  <style>
+    body {
+      font-family: "Prompt", sans-serif;
+      background-color: #eef2f7;
+      text-align: center;
+      padding: 2rem;
+      color: #222;
+    }
+    h1 {
+      font-size: 1.8rem;
+      color: #003366;
+    }
+    #status {
+      margin-top: 1.5rem;
+      font-size: 1.2rem;
+      background: #fff3cd;
+      padding: 1rem;
+      border-radius: 10px;
+      display: inline-block;
+      border: 1px solid #ffeeba;
+    }
+  </style>
+</head>
+<body>
+  <h1>🍽️ เมนูอาหารไทยด้วยเสียง</h1>
+  <p id="status">🔊 ระบบพร้อมทำงาน กรุณารอสักครู่...</p>
+
+  <script>
+    const token = "vd6V8MwWDonxjkjZD-XXx3fKqsidTaDv";
+    const blynkURL = "https://blynk.cloud/external/api/update";
+    const menuMap = {
+      "ต้มยำกุ้ง": "V0",
+      "ผัดกระเพรา": "V1",
+      "แกงส้ม": "V2"
+    };
+    const descriptions = {
+      "แกงส้ม": "เมนูแกงส้มรสเปรี้ยวจัดจ้านจากน้ำมะขามเปียกและเครื่องแกงโขลกสด เติมผักเช่นดอกแคหรือผักกะหล่ำ และปลาน้ำจืดหรือกุ้ง รสเปรี้ยว เผ็ด หอมถึงใจ",
+      "ต้มยำกุ้ง": "ต้มยำกุ้งรสเข้มข้น เปรี้ยวจากมะนาว เผ็ดจากพริกขี้หนู โดดเด่นด้วยกลิ่นหอมของตะไคร้ ใบมะกรูด ข่า และเห็ดฟาง เสิร์ฟพร้อมกุ้งสดตัวโต",
+      "ผัดกระเพรา": "ผัดกระเพราไทยแท้ หอมกลิ่นกระเทียมและพริกคั่ว ผัดร้อน ๆ กับเนื้อหมูหรือไก่ เติมใบกะเพราสดๆ รสเผ็ด เค็ม กลมกล่อม สไตล์ไทยแท้"
+    };
+
+    function speak(text, callback = null, delay = 0) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'th-TH';
+      if (callback) u.onend = () => setTimeout(callback, delay);
+      speechSynthesis.speak(u);
+      document.getElementById("status").textContent = text;
+    }
+
+    function sendToBlynk(pin, callback) {
+      fetch(`${blynkURL}?token=${token}&${pin}=1`)
+        .then(() => callback());
+    }
+
+    function listenForYesNo(yesCallback, noCallback) {
+      const recog = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recog.lang = 'th-TH';
+      recog.start();
+
+      recog.onresult = (event) => {
+        const result = event.results[0][0].transcript.trim();
+        if (result.includes("ใช่")) {
+          yesCallback();
+        } else if (result.includes("ไม่")) {
+          noCallback();
+        } else {
+          speak("กรุณาตอบว่า ใช่ หรือ ไม่", () => listenForYesNo(yesCallback, noCallback), 1000);
+        }
+      };
+
+      recog.onerror = () => {
+        speak("เกิดข้อผิดพลาดในการฟังเสียง", () => listenForYesNo(yesCallback, noCallback), 1000);
+      };
+    }
+
+    function listenForMenu() {
+      const recog = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recog.lang = 'th-TH';
+      recog.start();
+
+      recog.onresult = (event) => {
+        const result = event.results[0][0].transcript.trim();
+        if (menuMap[result]) {
+          speak(`คุณเลือกเมนู ${result}`, () => {
+            sendToBlynk(menuMap[result], () => {
+              speak("สั่งอาหารเรียบร้อยแล้ว กำลังกลับไปยังหน้าเริ่มต้น", () => {
+                setTimeout(startIntro, 2000);
+              });
+            });
+          });
+        } else {
+          speak("ไม่พบเมนู กรุณาพูดใหม่อีกครั้ง", listenForMenu);
+        }
+      };
+
+      recog.onerror = () => {
+        speak("ระบบฟังไม่ชัด กรุณาพูดอีกครั้ง", listenForMenu);
+      };
+    }
+
+    function startMenuDescriptions() {
+      const menus = Object.keys(menuMap);
+      let index = 0;
+
+      function next() {
+        if (index >= menus.length) {
+          speak("กรุณาพูดชื่อเมนูที่ต้องการสั่ง", listenForMenu);
+          return;
+        }
+        const item = menus[index];
+        speak(`${item}: ${descriptions[item]}`, () => {
+          index++;
+          setTimeout(next, 500);
+        });
+      }
+
+      next();
+    }
+
+    function startIntro() {
+      speak("เมนูอาหารไทย ท่านต้องการสั่งหรือไม่ กรุณาตอบว่า ใช่ หรือ ไม่", () => {
+        listenForYesNo(startMenuDescriptions, () => {
+          speak("ระบบจะถามใหม่อีกครั้งในภายหลัง", () => {
+            setTimeout(startIntro, 60000); // ถามใหม่ทุก 60 วินาที
+          });
+        });
+      });
+    }
+
+    window.onload = () => {
+      setTimeout(startIntro, 1000);
+    };
+  </script>
+</body>
+</html>
